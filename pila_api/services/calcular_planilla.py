@@ -308,9 +308,9 @@ def calcular_planilla(planilla_id: int) -> dict:
                 pension_empl = _calc_pct(ibc_pension_calc, TASA_PENSION_EMPL) if aplica_pension else D0
 
                 # ARL
-                # VAC/IGE/LMA: mismos días e IBC que salud, pero tarifa 0% (no exposición a riesgos)
+                # VAC/IGE/LMA/SLN/IRL: mismos días e IBC que salud, pero tarifa 0% (no exposición a riesgos)
                 tiene_novedad_sin_riesgo = any(
-                    (n.tipo_novedad or "").upper() in ("VAC", "IGE", "LMA")
+                    (n.tipo_novedad or "").upper() in ("VAC", "IGE", "LMA", "SLN", "IRL")
                     for n in d.novedades.all()
                 )
                 if aplica_arl and not tiene_novedad_sin_riesgo:

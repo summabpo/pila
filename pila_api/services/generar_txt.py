@@ -51,6 +51,10 @@ def _format_tarifa_arl(tarifa):
         return ""
 
 
+# Mapeo clase_riesgo (1-5) -> tarifa ARL en % (para fallback cuando falta en payload)
+_CLASE_RIESGO_A_TARIFA = {"1": "0.522", "2": "1.044", "3": "2.436", "4": "4.350", "5": "6.960"}
+
+
 def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = None) -> str:
     """
     Genera el archivo TXT PILA completo para una planilla.
@@ -258,6 +262,8 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
             fecha_lma_fin = ""  # Campo 88 (pos 595-604)
             fecha_vac_inicio = ""  # Campo 89 (pos 605-614)
             fecha_vac_fin = ""  # Campo 90 (pos 615-624)
+            fecha_irl_inicio = ""  # Campo 93 (pos 645-654)
+            fecha_irl_fin = ""  # Campo 94 (pos 655-664)
             
             for nov in novedades_detalle:
                 codigo = nov.tipo_novedad.upper()
@@ -291,6 +297,8 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
                     fecha_vac_fin = nov.fecha_fin.isoformat() if nov.fecha_fin else ""
                 elif codigo == "IRL":
                     irl_dias = nov.dias or 0
+                    fecha_irl_inicio = nov.fecha_inicio.isoformat() if nov.fecha_inicio else ""
+                    fecha_irl_fin = nov.fecha_fin.isoformat() if nov.fecha_fin else ""
             
             # Calcular parafiscales con redondeo según Decreto 1990
             ibc_caja_valor = float(caja.get("ibc", 0))
@@ -317,13 +325,22 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
             subtipo_norm = str(detalle.subtipo_cotizante or "").strip().zfill(2)
             no_obligado_pension = detalle.tipo_cotizante == "23" or subtipo_norm not in ("00", "12")
             
-            # Error 835: Si hay novedades de ausentismo (VAC, IGE, LMA, SLN), tarifa ARL debe ser 0
-            # Pensionados (no obligado): tarifa ARL debe ser 0 para Aportes en Línea
-            tiene_novedad_ausentismo = bool(nov_vac or nov_ige or nov_lma or nov_sln)
-            if tiene_novedad_ausentismo or no_obligado_pension:
+            # Error 835: Si hay novedades de ausentismo (VAC, IGE, LMA, SLN, IRL), tarifa ARL debe ser 0
+            # IRL = incapacidad riesgo laboral: días sin exposición a riesgos, tarifa 0 en esa línea
+            # Pensionados/exonerados de pensión SÍ cotizan ARL: mantienen su tarifa real (no 0)
+            tiene_novedad_ausentismo = bool(nov_vac or nov_ige or nov_lma or nov_sln or irl_dias)
+            if tiene_novedad_ausentismo:
                 tarifa_arl_formateada = "0.0000000"
             else:
-                tarifa_arl_formateada = _format_tarifa_arl(tarifa_arl) if tarifa_arl else ""
+                # Pensionados: priorizar clase_riesgo (Error 355 exige 0.0435 según clase)
+                # El payload a veces trae tarifa 0/vacía para exonerados; clase_riesgo es fiable
+                clase_riesgo = str(emp_payload.get("clase_riesgo") or detalle.riesgo_arl or "").strip()
+                tarifa_arl_efectiva = _CLASE_RIESGO_A_TARIFA.get(clase_riesgo) if no_obligado_pension else None
+                if not tarifa_arl_efectiva:
+                    tarifa_arl_efectiva = tarifa_arl
+                if not tarifa_arl_efectiva or (isinstance(tarifa_arl_efectiva, (int, float)) and float(tarifa_arl_efectiva) == 0):
+                    tarifa_arl_efectiva = _CLASE_RIESGO_A_TARIFA.get(clase_riesgo)
+                tarifa_arl_formateada = _format_tarifa_arl(tarifa_arl_efectiva) if tarifa_arl_efectiva else ""
 
             # Construir data para Registro02Renderer
             data_02 = {
@@ -400,9 +417,10 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
                 "v_327_332": 0,  # Campo 56: UPC adicional
                 
                 # ARL
+                # Error 194: Cotización obligatoria riesgos debe ser $0 cuando hay ausentismo (IRL, VAC, etc.)
                 "tarifa_arl": tarifa_arl_formateada,
                 "centro_trabajo": centro_trabajo,
-                "cotizacion_arl": arl.get("empleador", 0),
+                "cotizacion_arl": 0 if tiene_novedad_ausentismo else arl.get("empleador", 0),
                 
                 # Parafiscales (valores ya calculados con redondeo)
                 "tarifa_ccf": tarifa_ccf_val,
@@ -436,6 +454,8 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
                 "fecha_lma_fin": fecha_lma_fin,
                 "fecha_vac_inicio": fecha_vac_inicio,
                 "fecha_vac_fin": fecha_vac_fin,
+                "fecha_irl_inicio": fecha_irl_inicio,
+                "fecha_irl_fin": fecha_irl_fin,
                 
                 # Campos 333-693: resto sin mapear aún
                 "raw_333_693": None,

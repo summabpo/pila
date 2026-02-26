@@ -160,10 +160,10 @@ class Registro02Renderer:
         # CAMPOS ARL (zona 333-693)
         # ===================================================================
         
-        # 381-389 Campo 61: Tarifa aportes riesgos laborales (9 chars, numérico)
+        # 381-389 Campo 61: Tarifa aportes riesgos laborales (9 chars)
         tarifa_arl = str(data.get("tarifa_arl", "")).strip()
         if tarifa_arl:
-            l.set_alpha(381, 389, tarifa_arl)
+            l.set_alpha(381, 389, tarifa_arl[:9].ljust(9, '0'))
         
         # 390-398 Campo 62: Centro de trabajo (9 chars, numérico). Siempre escribir (0, 1, 3 o 5).
         centro_trabajo = data.get("centro_trabajo", 0)
@@ -298,6 +298,16 @@ class Registro02Renderer:
         fecha_vac_fin = str(data.get("fecha_vac_fin", "")).strip()
         if fecha_vac_fin:
             l.set_alpha(615, 624, fecha_vac_fin[:10])
+        
+        # Campo 93 (pos 645-654): Fecha inicio IRL (AAAA-MM-DD)
+        fecha_irl_inicio = str(data.get("fecha_irl_inicio", "")).strip()
+        if fecha_irl_inicio:
+            l.set_alpha(645, 654, fecha_irl_inicio[:10])
+        
+        # Campo 94 (pos 655-664): Fecha fin IRL (AAAA-MM-DD)
+        fecha_irl_fin = str(data.get("fecha_irl_fin", "")).strip()
+        if fecha_irl_fin:
+            l.set_alpha(655, 664, fecha_irl_fin[:10])
         
         # 687-693 Campo 98: Actividad económica riesgos laborales (7 chars, numérico)
         actividad_economica = str(data.get("actividad_economica_arl", "")).strip()
