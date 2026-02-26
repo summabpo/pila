@@ -1,0 +1,37 @@
+# Control de versiones
+.git
+.gitignore
+.dockerignore
+Dockerfile
+
+# Variables de entorno (secretos)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# IDE y workspace
+.vscode/
+.idea/
+*.code-workspace
+
+# Logs y temporales
+*.log
+*.tmp
+*.swp
+*~
+
+# Tests y scripts de desarrollo
+test_*.py
+pila_api/scripts/
+*.txt
+!requirements.txt

@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-ryaxno_3y(#lpd5=pd2=)f(s==2%$g%ujef**$q2)!+&d4$@7%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [pila.nomiweb.co]
 
 
 # Application definition
