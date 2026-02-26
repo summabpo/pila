@@ -1,0 +1,53 @@
+---
+description: Reglas de trabajo para el proyecto PILA + Nomiweb (workspace conjunto). Modelo estable y flujo de cambios.
+alwaysApply: true
+---
+
+# Proyecto PILA + Nomiweb – Reglas de trabajo
+
+## Alcance
+
+Este workspace incluye **nomiweb** (Django, payload JSON PILA) y **pila** (microservicio, generación TXT PILA). Las reglas aplican a ambos cuando se trabaja en este contexto.
+
+---
+
+## 1. Uso del mismo modelo (recomendación al usuario)
+
+**La IA no puede elegir el modelo**; eso se configura en Cursor (Settings → Models). Para evitar reaprendizaje y retrasos en este proyecto:
+
+- **Recomendación:** Usa siempre el **mismo modelo** (ej. Claude, GPT-4o, o el que prefieras) para Chat y Composer en este workspace.
+- **Cómo fijarlo:** En Cursor: **Settings → Cursor Settings → Models** y selecciona un modelo por defecto para este proyecto o globalmente.
+- Si cambias de modelo, en el primer mensaje del nuevo chat indica: "Sigo con PILA/Nomiweb, Fase X" y pega el mensaje de arranque o referencias a `PILA_ANALISIS_FASES.md` para dar contexto rápido.
+
+---
+
+## 2. Flujo antes de modificar código
+
+- **Antes de crear o modificar cualquier archivo**, la IA debe indicar con claridad:
+  - Qué archivo(s) va a tocar.
+  - Qué va a hacer (resumen del cambio).
+- **Solo después** de que el usuario responda **"adelante"** (o equivalente explícito), se ejecutan los cambios en disco.
+- No hacer ediciones no solicitadas ni asumir aprobación tácita.
+
+---
+
+## 3. Documentación de referencia
+
+Para no perder el hilo entre sesiones, usar siempre esta documentación del repo:
+
+| Documento | Ruta | Uso |
+|-----------|------|-----|
+| Análisis en 2 fases y tareas | `nomiweb/documentation/PILA_ANALISIS_FASES.md` | Fase 1 (JSON Nomiweb) y Fase 2 (TXT microservicio). |
+| Estado del proyecto PILA | `nomiweb/documentation/PILA_ESTADO_PROYECTO.md` | Contexto general, fases, convenciones. |
+| Layout registro tipo 02 | `pila/docs/LAYOUT_REGISTRO_02.md` | Posiciones, tipos y validaciones del TXT (Anexo Técnico 2). |
+| README microservicio | `pila/README.md` | Estructura y API del proyecto pila. |
+
+Al iniciar una sesión nueva, el usuario puede pegar un mensaje de arranque que cite estos documentos y la tarea concreta (ej. "Fase 1, tarea 1.1.1").
+
+---
+
+## 4. Resumen
+
+- **Modelo:** Recomendar al usuario usar el mismo modelo; configurarlo en Cursor Settings.
+- **Ediciones:** Avisar qué se va a cambiar y esperar "adelante".
+- **Contexto:** Apoyarse en los cuatro documentos de la tabla para mantener continuidad entre chats.
