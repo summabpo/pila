@@ -24,11 +24,17 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
-.venv/
+# Environments (secretos locales)
+.env
+.env.*
+**/.env
+**/.env.*
+.venv
+env/
 venv/
 ENV/
-env/
+env.bak/
+venv.bak/
 
 # Django
 *.log
