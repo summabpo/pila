@@ -21,12 +21,14 @@ load_dotenv(BASE_DIR / ".env")
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-ryaxno_3y(#lpd5=pd2=)f(s==2%$g%ujef**$q2)!+&d4$@7%'
+SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-dev-key-change-in-production")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
 
-ALLOWED_HOSTS = [pila.nomiweb.co]
+# ALLOWED_HOSTS desde .env (comma-separated) o valor por defecto
+_allowed = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,pila.nomiweb.co")
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",") if h.strip()]
 
 
 # Application definition
