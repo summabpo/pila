@@ -7,12 +7,14 @@ class EmpresaSerializer(serializers.Serializer):
     nit = serializers.CharField(max_length=20)
     dv = serializers.CharField(max_length=1, required=False, allow_blank=True)  # Dígito de verificación
     razon_social = serializers.CharField(max_length=255)
-    sucursal = serializers.CharField(max_length=5, allow_blank=True)
+    sucursal = serializers.CharField(max_length=5, required=False, allow_blank=True)
     tipo_documento_aportante = serializers.CharField(max_length=2, required=False, default="NI")
     tipo_aportante = serializers.CharField(max_length=2)
     clase_aportante = serializers.CharField(max_length=1, required=False, default="A")
     tipo_presentacion_planilla = serializers.CharField(max_length=1, required=False, default="U")  # U=única, S=sucursal
     codigo_arl = serializers.CharField(max_length=10, required=False, allow_blank=True)  # Código ARL del aportante
+    codigo_sucursal = serializers.CharField(max_length=10, required=False, allow_blank=True)  # Encabezado archivo tipo 2 campo 12
+    nombre_sucursal = serializers.CharField(max_length=40, required=False, allow_blank=True)  # Encabezado archivo tipo 2 campo 13
     flags = serializers.DictField(required=False, default=dict)
 
 class PlanillaSerializer(serializers.Serializer):

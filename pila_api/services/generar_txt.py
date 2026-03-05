@@ -1,5 +1,6 @@
 # pila_api/services/generar_txt.py
 
+from datetime import date
 from decimal import Decimal
 from django.db import transaction
 from pila_api.models import PilaPlanilla, PilaPlanillaDetalle
@@ -120,48 +121,58 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
             ibc_caja = caja_detalle.get("ibc", 0)
             valor_total_nomina += int(float(ibc_caja))
         
-        # El NIT en el registro 01 (pos 210-218) es de 9 caracteres, sin DV
-        nit_empresa = str(empresa.get("nit", "")).strip()
-        # Si el NIT incluye el DV concatenado, tomar solo los primeros 9 dígitos
-        if len(nit_empresa) > 9:
-            nit_empresa = nit_empresa[:9]
-        
-        # Dígito de verificación (separado del NIT)
+        # NIT: pos 210-225 (16 chars A). DV separado pos 226.
+        nit_empresa = str(empresa.get("nit", "")).strip()[:16]
         dv_empresa = str(empresa.get("dv", "")).strip()
-        
-        # Tipo de presentación (U=única, S=sucursal)
         tipo_presentacion = str(empresa.get("tipo_presentacion_planilla", "U")).strip()
-        
-        # Código ARL del aportante (6 caracteres)
         codigo_arl_aportante = str(empresa.get("codigo_arl", "")).strip()
-        
-        # Periodo cotización (pos 305-311): mes que se liquida. Periodo pago (pos 312-318): mes siguiente
-        periodo_cotizacion = planilla.periodo  # YYYY-MM del mes liquidado
+        codigo_sucursal = str(empresa.get("codigo_sucursal", "")).strip()
+        nombre_sucursal = str(empresa.get("nombre_sucursal", "")).strip()
+        tipo_doc_aportante = str(empresa.get("tipo_documento_aportante", "NI")).strip()[:2]
+        tipo_aportante_empresa = str(empresa.get("tipo_aportante", "01")).strip()[:2].zfill(2)
+
+        # Periodo pago: mes siguiente al liquidado (aaaa-mm)
+        periodo_cotizacion = planilla.periodo
         año, mes = int(periodo_cotizacion[:4]), int(periodo_cotizacion[5:7])
         mes_siguiente = mes + 1 if mes < 12 else 1
         año_siguiente = año if mes < 12 else año + 1
-        periodo_pago = f"{año_siguiente}-{mes_siguiente:02d}"  # Un mes adicional (ej: 2025-12 → 2026-01)
-        
-        # Tipo planilla: K para estudiantes (tipo 23), E para resto
+        periodo_pago = f"{año_siguiente}-{mes_siguiente:02d}"
+
         if filtro_tipo_planilla:
             tipo_planilla_01 = filtro_tipo_planilla
         else:
             tipo_planilla_01 = planilla_data.get("tipo_planilla", "E")
-        
+
+        # Campos 9-10: número y fecha planilla asociada (en blanco para E, K, A, I, M, S, Y, H, T, X, K, Q, B)
+        numero_planilla_asociada = ""
+        fecha_pago_planilla_asociada = ""
+        # Campos 17-18: radicación y fecha pago (asignados por operador; blanco si no aplica)
+        numero_radicacion = None  # en blanco hasta que el operador asigne
+        fecha_pago = date.today().isoformat()  # operador puede sobreescribir
+        codigo_operador = "00"  # 00 cuando no es procesado por aportesenlinea; operador asigna el suyo
+
         data_01 = {
-            "codigo_3_7": "10001",  # TODO: determinar si viene del payload o es fijo
+            "modalidad_planilla": "1",  # 1=Electrónica, 2=Asistida
+            "secuencia": "0001",
             "razon_social": empresa.get("razon_social", ""),
-            "tipo_doc": "NI",  # NIT (estándar para empresas)
+            "tipo_doc": tipo_doc_aportante,
             "num_doc": nit_empresa,
-            "dv": dv_empresa,  # Campo 9 (pos 226): Dígito de verificación
+            "dv": dv_empresa,
             "tipo_planilla": tipo_planilla_01,
-            "forma_presentacion": tipo_presentacion,  # Campo 10 (pos 248): U=única, S=sucursal
-            "codigo_arl": codigo_arl_aportante,  # Campo 18 (pos 299-304): Código ARL del aportante
-            "periodo_cotizacion": periodo_cotizacion,  # Pos 305-311: mes de aportes liquidados
-            "periodo_pago": periodo_pago,  # Pos 312-318: mes siguiente al liquidado
-            "total_cotizantes": total_cotizantes,  # Campo 19 (pos 339-343)
-            "valor_total_nomina": valor_total_nomina,  # Campo 20 (pos 344-355)
-            "tipo_aportante": "01",  # Campo 30 (pos 356-357): 01 = empleador
+            "numero_planilla_asociada": numero_planilla_asociada,
+            "fecha_pago_planilla_asociada": fecha_pago_planilla_asociada,
+            "forma_presentacion": tipo_presentacion,
+            "codigo_sucursal": codigo_sucursal,
+            "nombre_sucursal": nombre_sucursal,
+            "codigo_arl": codigo_arl_aportante,
+            "periodo_pago_no_salud": periodo_pago,
+            "periodo_pago_salud": periodo_pago,
+            "numero_radicacion": numero_radicacion,
+            "fecha_pago": fecha_pago,
+            "total_cotizantes": total_cotizantes,
+            "valor_total_nomina": valor_total_nomina,
+            "tipo_aportante": tipo_aportante_empresa,
+            "codigo_operador": codigo_operador,
         }
         
         renderer_01 = Registro01Renderer()
@@ -192,11 +203,10 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
             # Extraer entidades
             entidades = emp_payload.get("entidades", {})
             
-            # Extraer códigos DANE
+            # Extraer códigos DANE (departamento y municipio separados según layout registro 02)
             cod_departamento = emp_payload.get("cod_departamento", "")
             cod_municipio = emp_payload.get("cod_municipio", "")
-            municipio_concat = f"{cod_departamento}{cod_municipio}".ljust(5)[:5]
-            
+        
             # Extraer nombres completos (4 campos)
             primer_apellido = emp_payload.get("primer_apellido", detalle.primer_apellido)
             segundo_apellido = emp_payload.get("segundo_apellido", "")
@@ -350,8 +360,9 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
                 "tipo_cotizante": detalle.tipo_cotizante,
                 "subtipo_cotizante": detalle.subtipo_cotizante or "00",
                 
-                # DANE
-                "municipio": municipio_concat,
+                # DANE (layout campos 9 y 10: departamento 32-33, municipio 34-36)
+                "cod_departamento": cod_departamento,
+                "cod_municipio": cod_municipio,
                 
                 # Nombres completos (4 campos)
                 "papellido": primer_apellido,

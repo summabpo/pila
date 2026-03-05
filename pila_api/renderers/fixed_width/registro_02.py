@@ -30,8 +30,11 @@ class Registro02Renderer:
         l.set_alpha(26, 27, str(data.get("tipo_cotizante", "")).strip())
         l.set_alpha(28, 29, str(data.get("subtipo_cotizante", "")).strip())
 
-        # 32-36 municipio (DANE)
-        l.set_alpha(32, 36, str(data.get("municipio", "")).strip())
+        # 32-33 código departamento / 34-36 código municipio (DANE)
+        dep = str(data.get("cod_departamento", "")).strip()
+        mun = str(data.get("cod_municipio", "")).strip()
+        l.set_alpha(32, 33, dep[:2])
+        l.set_alpha(34, 36, mun[:3])
 
         # 37-56 primer apellido (20)
         l.set_alpha(37, 56, data.get("papellido", ""))
