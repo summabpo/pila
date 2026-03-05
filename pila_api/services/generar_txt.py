@@ -146,9 +146,9 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
         # Campos 9-10: número y fecha planilla asociada (en blanco para E, K, A, I, M, S, Y, H, T, X, K, Q, B)
         numero_planilla_asociada = ""
         fecha_pago_planilla_asociada = ""
-        # Campos 17-18: radicación y fecha pago (asignados por operador; blanco si no aplica)
+        # Campos 17-18: radicación y fecha pago (asignados por operador; Error 132 exige vacíos al presentar)
         numero_radicacion = None  # en blanco hasta que el operador asigne
-        fecha_pago = date.today().isoformat()  # operador puede sobreescribir
+        fecha_pago = ""  # vacío al presentar; el operador asigna la fecha efectiva de pago
         codigo_operador = "00"  # 00 cuando no es procesado por aportesenlinea; operador asigna el suyo
 
         data_01 = {
