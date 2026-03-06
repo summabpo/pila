@@ -159,8 +159,6 @@ def calcular_planilla(planilla_id: int) -> dict:
                 "aplica_caja": bool(f.get("aplica_caja", True)),
             }
 
-        empleados_ok = 0
-        empleados_error = 0
         warnings = 0
 
         tot_emp = D0
@@ -408,14 +406,12 @@ def calcular_planilla(planilla_id: int) -> dict:
                 d.aportes = {}
                 d.aportes_empleado = D0
                 d.aportes_empleador = D0
-                empleados_error += 1
             else:
                 d.estado = "OK"
                 d.errores = []
                 d.aportes = aportes
                 d.aportes_empleado = aportes_emp
                 d.aportes_empleador = aportes_empl
-                empleados_ok += 1
 
                 tot_emp += aportes_emp
                 tot_empl += aportes_empl
@@ -435,9 +431,14 @@ def calcular_planilla(planilla_id: int) -> dict:
                 "aportes", "aportes_empleado", "aportes_empleador",
             ])
 
+        # Total empleados = cotizantes ÚNICOS (tipo_doc + numero_doc), no número de líneas (Error 184)
+        unique_cotizantes = set((d.tipo_doc, d.numero_doc) for d in detalles)
+        empleados_procesados = len(unique_cotizantes)
+        empleados_con_error = len(set((d.tipo_doc, d.numero_doc) for d in detalles if d.estado == "CON_ERROR"))
+
         planilla.resumen = {
-            "empleados_procesados": empleados_ok + empleados_error,
-            "empleados_con_error": empleados_error,
+            "empleados_procesados": empleados_procesados,
+            "empleados_con_error": empleados_con_error,
             "warnings": warnings,
         }
 
@@ -461,7 +462,7 @@ def calcular_planilla(planilla_id: int) -> dict:
             }
         }
 
-        planilla.estado = "COMPLETADA" if empleados_error == 0 else "CON_ERRORES"
+        planilla.estado = "COMPLETADA" if empleados_con_error == 0 else "CON_ERRORES"
         planilla.save(update_fields=["resumen", "totales", "estado"])
 
         return {
