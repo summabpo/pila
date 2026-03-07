@@ -406,3 +406,28 @@ def descargar_archivo(request, planilla_id: int):
             {"detail": f"Error interno: {str(e)}"},
             status=500
         )
+
+
+@api_view(["GET"])
+def descargar_payload_json(request, planilla_id: int):
+    """
+    GET /api/v1/pila/planillas/{planilla_id}/payload/
+    Devuelve el payload JSON (payload_inicial) usado en la liquidación.
+    """
+    auth_error = _require_service_token(request)
+    if auth_error:
+        return auth_error
+
+    try:
+        planilla = PilaPlanilla.objects.get(planilla_id=planilla_id)
+    except PilaPlanilla.DoesNotExist:
+        return JsonResponse({"detail": "Planilla no existe"}, status=404)
+
+    payload = planilla.payload_inicial
+    if payload is None:
+        return JsonResponse({"detail": "No hay payload guardado para esta planilla"}, status=404)
+
+    contenido = json.dumps(payload, ensure_ascii=False, indent=2)
+    response = HttpResponse(contenido, content_type="application/json; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="PILA_payload_{planilla.numero_interno}.json"'
+    return response

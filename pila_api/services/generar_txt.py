@@ -131,12 +131,12 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
         tipo_doc_aportante = str(empresa.get("tipo_documento_aportante", "NI")).strip()[:2]
         tipo_aportante_empresa = str(empresa.get("tipo_aportante", "01")).strip()[:2].zfill(2)
 
-        # Periodo pago: mes siguiente al liquidado (aaaa-mm)
-        periodo_cotizacion = planilla.periodo
+        # Campo 15 = periodo seleccionado (sistemas distintos a salud). Campo 16 = mes siguiente (sistema salud)
+        periodo_cotizacion = planilla.periodo  # aaaa-mm que se captura en el select (ej. 2025-12)
         año, mes = int(periodo_cotizacion[:4]), int(periodo_cotizacion[5:7])
         mes_siguiente = mes + 1 if mes < 12 else 1
         año_siguiente = año if mes < 12 else año + 1
-        periodo_pago = f"{año_siguiente}-{mes_siguiente:02d}"
+        periodo_pago_salud = f"{año_siguiente}-{mes_siguiente:02d}"  # Campo 16: periodo pago sistema salud
 
         if filtro_tipo_planilla:
             tipo_planilla_01 = filtro_tipo_planilla
@@ -165,8 +165,8 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
             "codigo_sucursal": codigo_sucursal,
             "nombre_sucursal": nombre_sucursal,
             "codigo_arl": codigo_arl_aportante,
-            "periodo_pago_no_salud": periodo_pago,
-            "periodo_pago_salud": periodo_pago,
+            "periodo_pago_no_salud": periodo_cotizacion,  # Campo 15: periodo del select (ej. 2025-12)
+            "periodo_pago_salud": periodo_pago_salud,     # Campo 16: mes siguiente (ej. 2026-01)
             "numero_radicacion": numero_radicacion,
             "fecha_pago": fecha_pago,
             "total_cotizantes": total_cotizantes,
