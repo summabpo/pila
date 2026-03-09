@@ -1,6 +1,7 @@
 # pila_api/views.py
 
 import json
+import traceback
 from datetime import date, datetime
 
 from django.conf import settings
@@ -9,6 +10,7 @@ from django.http import JsonResponse, HttpResponse
 
 from rest_framework import status
 from rest_framework.decorators import api_view
+from rest_framework.exceptions import APIException
 
 from .models import PilaPlanilla, PilaPlanillaDetalle, PilaNovedad
 from .serializers import PayloadPlanillaSerializer
@@ -80,165 +82,178 @@ def crear_planilla(request):
     if auth_error:
         return auth_error
 
-    serializer = PayloadPlanillaSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    payload = serializer.validated_data
+    try:
+        serializer = PayloadPlanillaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
 
-    empresa = payload["empresa"]
-    planilla_data = payload["planilla"]
-    empleados = payload.get("empleados", [])
+        empresa = payload["empresa"]
+        planilla_data = payload["planilla"]
+        empleados = payload.get("empleados", [])
 
-    if not empleados:
-        return JsonResponse({"detail": "Payload sin empleados"}, status=400)
+        if not empleados:
+            return JsonResponse({"detail": "Payload sin empleados"}, status=400)
 
-    numero_interno = planilla_data["numero_interno"]
+        numero_interno = planilla_data["numero_interno"]
 
-    obj, created = PilaPlanilla.objects.get_or_create(
-    numero_interno=numero_interno,
-    defaults={
-        "periodo": payload["periodo"],
-        "empresa_nit": empresa["nit"],
-        "empresa_sucursal": empresa["sucursal"],
-        "estado": "EN_PROCESO",
-        "payload_inicial": request.data,
-        "totales": None,
-        "resumen": {
-            "empleados_procesados": 0,
-            "empleados_con_error": 0,
-            "warnings": 0,
-        },
-        "errores": [],
-        "tiene_archivo": False,
-    }
+        obj, created = PilaPlanilla.objects.get_or_create(
+        numero_interno=numero_interno,
+        defaults={
+            "periodo": payload["periodo"],
+            "empresa_nit": empresa["nit"],
+            "empresa_sucursal": empresa["sucursal"],
+            "estado": "EN_PROCESO",
+            "payload_inicial": request.data,
+            "totales": None,
+            "resumen": {
+                "empleados_procesados": 0,
+                "empleados_con_error": 0,
+                "warnings": 0,
+            },
+            "errores": [],
+            "tiene_archivo": False,
+        }
 )
 
-    # 🔑 Forzar actualización del payload SIEMPRE
-    obj.payload_inicial = request.data
-    obj.errores = []
-    obj.estado = "EN_PROCESO"
-    obj.save(update_fields=["payload_inicial", "errores", "estado"])
-    
-    force = request.GET.get("force") == "1"
+        # 🔑 Forzar actualización del payload SIEMPRE
+        obj.payload_inicial = request.data
+        obj.errores = []
+        obj.estado = "EN_PROCESO"
+        obj.save(update_fields=["payload_inicial", "errores", "estado"])
+        
+        force = request.GET.get("force") == "1"
 
-    ya_tiene_detalles = PilaPlanillaDetalle.objects.filter(planilla=obj).exists()
+        ya_tiene_detalles = PilaPlanillaDetalle.objects.filter(planilla=obj).exists()
 
-    if force or created or not ya_tiene_detalles:
-        riesgo_arl_default = str(empresa.get("clase_riesgo_arl", "1"))
+        if force or created or not ya_tiene_detalles:
+            riesgo_arl_default = str(empresa.get("clase_riesgo_arl", "1"))
 
-        with transaction.atomic():
-            # limpieza segura
-            PilaNovedad.objects.filter(detalle__planilla=obj).delete()
-            PilaPlanillaDetalle.objects.filter(planilla=obj).delete()
+            with transaction.atomic():
+                # limpieza segura
+                PilaNovedad.objects.filter(detalle__planilla=obj).delete()
+                PilaPlanillaDetalle.objects.filter(planilla=obj).delete()
 
-            for emp in empleados:
-                tipo_doc = emp.get("tipo_doc", "")
-                numero_doc = emp.get("numero_doc") or emp.get("num_doc") or ""
+                for emp in empleados:
+                    tipo_doc = emp.get("tipo_doc", "")
+                    numero_doc = emp.get("numero_doc") or emp.get("num_doc") or ""
 
-                # Clase de riesgo (campo 78, pos 513): por empleado desde payload, según tarifa ARL
-                riesgo_arl = str(emp.get("clase_riesgo") or riesgo_arl_default).strip() or riesgo_arl_default
-                if riesgo_arl not in ("1", "2", "3", "4", "5"):
-                    riesgo_arl = riesgo_arl_default
+                    # Clase de riesgo (campo 78, pos 513): por empleado desde payload, según tarifa ARL
+                    riesgo_arl = str(emp.get("clase_riesgo") or riesgo_arl_default).strip() or riesgo_arl_default
+                    if riesgo_arl not in ("1", "2", "3", "4", "5"):
+                        riesgo_arl = riesgo_arl_default
 
-                # Extraer datos comunes del empleado
-                nombre = (emp.get("nombre_completo") or "").strip()
-                partes = [p for p in nombre.split() if p]
-                primer_apellido = partes[0] if len(partes) >= 1 else ""
-                primer_nombre = partes[1] if len(partes) >= 2 else ""
+                    # Extraer datos comunes del empleado
+                    nombre = (emp.get("nombre_completo") or "").strip()
+                    partes = [p for p in nombre.split() if p]
+                    primer_apellido = partes[0] if len(partes) >= 1 else ""
+                    primer_nombre = partes[1] if len(partes) >= 2 else ""
 
-                tipo_cotizante = emp.get("tipo_cotizante", "")
-                subtipo_cotizante = emp.get("subtipo_cotizante", "00")
-                entidades = emp.get("entidades") or {}
-                caja_compensacion = bool(entidades.get("caja"))
+                    tipo_cotizante = emp.get("tipo_cotizante", "")
+                    subtipo_cotizante = emp.get("subtipo_cotizante", "00")
+                    entidades = emp.get("entidades") or {}
+                    caja_compensacion = bool(entidades.get("caja"))
 
-                # ============================================
-                # NUEVO: Procesar múltiples registros por empleado
-                # ============================================
-                registros = emp.get("registros") or []
-                
-                # Si no hay registros (formato antiguo), crear uno con datos del empleado
-                if not registros:
-                    dias = emp.get("dias") or {}
-                    ibc = emp.get("ibc") or {}
-                    registros = [{
-                        "tipo_linea": "NORMAL",
-                        "dias": dias,
-                        "ibc": ibc,
-                        "novedades": emp.get("novedades") or []
-                    }]
-                
-                # Crear un detalle por cada registro (línea tipo 02)
-                for registro in registros:
-                    dias = registro.get("dias") or {}
-                    dias_salud = int(dias.get("salud", 0) or 0)
-                    dias_pension = int(dias.get("pension", 0) or 0)
-                    dias_arl = int(dias.get("arl", 0) or 0)
-                    dias_caja = int(dias.get("caja", 0) or 0)
+                    # ============================================
+                    # NUEVO: Procesar múltiples registros por empleado
+                    # ============================================
+                    registros = emp.get("registros") or []
+                    
+                    # Si no hay registros (formato antiguo), crear uno con datos del empleado
+                    if not registros:
+                        dias = emp.get("dias") or {}
+                        ibc = emp.get("ibc") or {}
+                        registros = [{
+                            "tipo_linea": "NORMAL",
+                            "dias": dias,
+                            "ibc": ibc,
+                            "novedades": emp.get("novedades") or []
+                        }]
+                    
+                    # Crear un detalle por cada registro (línea tipo 02)
+                    for registro in registros:
+                        dias = registro.get("dias") or {}
+                        dias_salud = int(dias.get("salud", 0) or 0)
+                        dias_pension = int(dias.get("pension", 0) or 0)
+                        dias_arl = int(dias.get("arl", 0) or 0)
+                        dias_caja = int(dias.get("caja", 0) or 0)
 
-                    # mantenemos dias_cotizados como "principal" usando salud
-                    dias_cotizados = dias_salud
+                        # mantenemos dias_cotizados como "principal" usando salud
+                        dias_cotizados = dias_salud
 
-                    ibc = registro.get("ibc") or {}
-                    ibc_salud = ibc.get("salud") or 0
-                    ibc_pension = ibc.get("pension") or 0
-                    ibc_arl = ibc.get("arl") or 0
+                        ibc = registro.get("ibc") or {}
+                        ibc_salud = ibc.get("salud") or 0
+                        ibc_pension = ibc.get("pension") or 0
+                        ibc_arl = ibc.get("arl") or 0
 
-                    detalle = PilaPlanillaDetalle.objects.create(
-                        planilla=obj,
-                        tipo_doc=tipo_doc,
-                        numero_doc=numero_doc,
-                        primer_nombre=primer_nombre,
-                        primer_apellido=primer_apellido,
-                        tipo_cotizante=tipo_cotizante,
-                        subtipo_cotizante=subtipo_cotizante,
+                        detalle = PilaPlanillaDetalle.objects.create(
+                            planilla=obj,
+                            tipo_doc=tipo_doc,
+                            numero_doc=numero_doc,
+                            primer_nombre=primer_nombre,
+                            primer_apellido=primer_apellido,
+                            tipo_cotizante=tipo_cotizante,
+                            subtipo_cotizante=subtipo_cotizante,
 
-                        dias_cotizados=dias_cotizados,
-                        dias_salud=dias_salud,
-                        dias_pension=dias_pension,
-                        dias_arl=dias_arl,
-                        dias_caja=dias_caja,
+                            dias_cotizados=dias_cotizados,
+                            dias_salud=dias_salud,
+                            dias_pension=dias_pension,
+                            dias_arl=dias_arl,
+                            dias_caja=dias_caja,
 
-                        ibc=ibc_salud,
-                        ibc_salud=ibc_salud,
-                        ibc_pension=ibc_pension,
-                        ibc_arl=ibc_arl,
-                        riesgo_arl=riesgo_arl,
-                        caja_compensacion=caja_compensacion,
-                        estado="OK",
-                        errores=[],
-                    )
-
-                    # Crear novedades para este registro específico
-                    for nov in (registro.get("novedades") or []):
-                        if not isinstance(nov, dict):
-                            continue
-                        codigo = (nov.get("codigo") or "").upper()
-                        if not codigo:
-                            continue
-
-                        fi = _to_date(nov.get("fecha_desde"))
-                        ff = _to_date(nov.get("fecha_hasta"))
-
-                        if not fi:
-                            continue
-
-                        PilaNovedad.objects.create(
-                            detalle=detalle,
-                            tipo_novedad=codigo,
-                            fecha_inicio=fi,
-                            fecha_fin=ff,
-                            dias=nov.get("dias"),
-                            valor=nov.get("valor"),
-                            metadata=json_safe(nov),
+                            ibc=ibc_salud,
+                            ibc_salud=ibc_salud,
+                            ibc_pension=ibc_pension,
+                            ibc_arl=ibc_arl,
+                            riesgo_arl=riesgo_arl,
+                            caja_compensacion=caja_compensacion,
+                            estado="OK",
+                            errores=[],
                         )
 
-        # cálculo SOLO una vez
-        calcular_planilla(obj.planilla_id)
-        obj.refresh_from_db()
+                        # Crear novedades para este registro específico
+                        for nov in (registro.get("novedades") or []):
+                            if not isinstance(nov, dict):
+                                continue
+                            codigo = (nov.get("codigo") or "").upper()
+                            if not codigo:
+                                continue
 
-    return JsonResponse(
-        planilla_to_response(obj),
-        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-    )
+                            fi = _to_date(nov.get("fecha_desde"))
+                            ff = _to_date(nov.get("fecha_hasta"))
+
+                            if not fi:
+                                continue
+
+                            PilaNovedad.objects.create(
+                                detalle=detalle,
+                                tipo_novedad=codigo,
+                                fecha_inicio=fi,
+                                fecha_fin=ff,
+                                dias=nov.get("dias"),
+                                valor=nov.get("valor"),
+                                metadata=json_safe(nov),
+                            )
+
+            # cálculo SOLO una vez
+            calcular_planilla(obj.planilla_id)
+            obj.refresh_from_db()
+
+        return JsonResponse(
+            planilla_to_response(obj),
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    except APIException:
+        raise  # 400 validación, etc.: que DRF responda
+    except Exception as e:
+        tb = traceback.format_exc()
+        detail = str(e)
+        if getattr(settings, "DEBUG", False):
+            detail = f"{detail}\n\n{tb}"
+        return JsonResponse(
+            {"detail": detail, "error_type": type(e).__name__},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 @api_view(["GET"])
