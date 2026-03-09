@@ -147,28 +147,28 @@ def crear_planilla(request):
 
                 tipo_cotizante = emp.get("tipo_cotizante", "")
                 subtipo_cotizante = emp.get("subtipo_cotizante", "00")
-                entidades = emp.get("entidades", {})
+                entidades = emp.get("entidades") or {}
                 caja_compensacion = bool(entidades.get("caja"))
 
                 # ============================================
                 # NUEVO: Procesar múltiples registros por empleado
                 # ============================================
-                registros = emp.get("registros", [])
+                registros = emp.get("registros") or []
                 
                 # Si no hay registros (formato antiguo), crear uno con datos del empleado
                 if not registros:
-                    dias = emp.get("dias", {}) or {}
-                    ibc = emp.get("ibc", {})
+                    dias = emp.get("dias") or {}
+                    ibc = emp.get("ibc") or {}
                     registros = [{
                         "tipo_linea": "NORMAL",
                         "dias": dias,
                         "ibc": ibc,
-                        "novedades": emp.get("novedades", [])
+                        "novedades": emp.get("novedades") or []
                     }]
                 
                 # Crear un detalle por cada registro (línea tipo 02)
                 for registro in registros:
-                    dias = registro.get("dias", {}) or {}
+                    dias = registro.get("dias") or {}
                     dias_salud = int(dias.get("salud", 0) or 0)
                     dias_pension = int(dias.get("pension", 0) or 0)
                     dias_arl = int(dias.get("arl", 0) or 0)
@@ -177,10 +177,10 @@ def crear_planilla(request):
                     # mantenemos dias_cotizados como "principal" usando salud
                     dias_cotizados = dias_salud
 
-                    ibc = registro.get("ibc", {})
-                    ibc_salud = ibc.get("salud", 0)
-                    ibc_pension = ibc.get("pension", 0)
-                    ibc_arl = ibc.get("arl", 0)
+                    ibc = registro.get("ibc") or {}
+                    ibc_salud = ibc.get("salud") or 0
+                    ibc_pension = ibc.get("pension") or 0
+                    ibc_arl = ibc.get("arl") or 0
 
                     detalle = PilaPlanillaDetalle.objects.create(
                         planilla=obj,
@@ -208,7 +208,9 @@ def crear_planilla(request):
                     )
 
                     # Crear novedades para este registro específico
-                    for nov in registro.get("novedades", []):
+                    for nov in (registro.get("novedades") or []):
+                        if not isinstance(nov, dict):
+                            continue
                         codigo = (nov.get("codigo") or "").upper()
                         if not codigo:
                             continue
