@@ -5,7 +5,7 @@ import traceback
 from datetime import date, datetime
 
 from django.conf import settings
-from django.db import transaction
+from django.db import transaction, DataError
 from django.http import JsonResponse, HttpResponse
 
 from rest_framework import status
@@ -224,15 +224,23 @@ def crear_planilla(request):
                             if not fi:
                                 continue
 
-                            PilaNovedad.objects.create(
-                                detalle=detalle,
-                                tipo_novedad=codigo,
-                                fecha_inicio=fi,
-                                fecha_fin=ff,
-                                dias=nov.get("dias"),
-                                valor=nov.get("valor"),
-                                metadata=json_safe(nov),
-                            )
+                            try:
+                                PilaNovedad.objects.create(
+                                    detalle=detalle,
+                                    tipo_novedad=codigo,
+                                    fecha_inicio=fi,
+                                    fecha_fin=ff,
+                                    dias=nov.get("dias"),
+                                    valor=nov.get("valor"),
+                                    metadata=json_safe(nov),
+                                )
+                            except DataError as e:
+                                # Enriquecer mensaje para ubicar fácilmente el problema de longitud
+                                raise ValueError(
+                                    f"Error al guardar novedad PILA "
+                                    f"(planilla={obj.numero_interno}, tipo_doc={tipo_doc}, "
+                                    f"numero_doc={numero_doc}, codigo_novedad={codigo}): {e}"
+                                )
 
             # cálculo SOLO una vez
             calcular_planilla(obj.planilla_id)
