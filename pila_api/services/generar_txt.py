@@ -331,6 +331,15 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
                 tarifa_icbf_val = ""
                 valor_icbf_val = 0
             
+            # Error 330: Para novedad SLN la tarifa de aportes CCF debe ser 0 (licencia sin pago)
+            if nov_sln:
+                tarifa_ccf_val = "0.00000"
+                valor_ccf_val = 0
+                tarifa_sena_val = ""
+                valor_sena_val = 0
+                tarifa_icbf_val = ""
+                valor_icbf_val = 0
+            
             # No obligado a pensiones: tipo 23, o subtipo con valor distinto de 12 (si blanco/0/00 o 12 sí obligado)
             subtipo_norm = str(detalle.subtipo_cotizante or "").strip().zfill(2)
             no_obligado_pension = detalle.tipo_cotizante == "23" or subtipo_norm not in ("00", "12")
@@ -351,6 +360,18 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
                 if not tarifa_arl_efectiva or (isinstance(tarifa_arl_efectiva, (int, float)) and float(tarifa_arl_efectiva) == 0):
                     tarifa_arl_efectiva = _CLASE_RIESGO_A_TARIFA.get(clase_riesgo)
                 tarifa_arl_formateada = _format_tarifa_arl(tarifa_arl_efectiva) if tarifa_arl_efectiva else ""
+
+            # Error 362: En líneas con SLN (licencia sin pago) la tarifa salud debe ser 0. Solo SLN (3 chars; tabla novedades no permite SUSP).
+            tiene_novedad_sln_susp = bool(nov_sln)
+            if tiene_novedad_sln_susp:
+                tarifa_salud_val = "0.00000"
+                cotizacion_salud_val = 0
+            else:
+                tarifa_salud_val = (
+                    "0.00000" if detalle.tipo_cotizante == "23"
+                    else ("0.12500" if float(salud.get("empleador", 0) or 0) > 0 else "0.04000")
+                )
+                cotizacion_salud_val = int(float(salud.get("total", 0)))
 
             # Construir data para Registro02Renderer
             data_02 = {
@@ -419,12 +440,10 @@ def generar_txt_planilla(planilla_id: int, filtro_tipo_planilla: str | None = No
                 
                 # Salud
                 # Error 360: Tarifa salud 0 para cotizantes no obligados a EPS (tipo 23)
+                # Error 362: Tarifa salud 0 en líneas SLN (licencia sin pago)
                 # IBC > 10 SMLV: 12.5% (conceptosfijos idfijo 8+18). Exonerado: 4% empleado.
-                "v_309_317": (
-                    "0.00000" if detalle.tipo_cotizante == "23"
-                    else ("0.12500" if float(salud.get("empleador", 0) or 0) > 0 else "0.04000")
-                ),  # Campo 54 (308-314)
-                "v_318_326": int(float(salud.get("total", 0))),  # Campo 55: Cotización salud
+                "v_309_317": tarifa_salud_val,  # Campo 54 (308-314)
+                "v_318_326": cotizacion_salud_val,  # Campo 55: Cotización salud
                 "v_327_332": 0,  # Campo 56: UPC adicional
                 
                 # ARL

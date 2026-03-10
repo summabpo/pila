@@ -290,8 +290,13 @@ def calcular_planilla(planilla_id: int) -> dict:
 
                 # Salud: cuando IBC > 10 SMLV usar tasas de conceptosfijos (idfijo 8 y 18) = 4% + 8.5% = 12.5%
                 # Los integrales siempre superan 10 SMLV (mínimo ~25 SMLV, IBC ~70% ≈ 17.5 SMLV)
+                # Error 362: En líneas SLN (licencia sin pago) tarifa salud 0 → cotización salud 0. Solo SLN (tabla novedades 3 chars).
+                tiene_novedad_sln_susp = any(
+                    (n.tipo_novedad or "").upper() == "SLN"
+                    for n in d.novedades.all()
+                )
                 ibc_mayor_10_smmlv = ibc_salud_calc > (smmlv * Decimal("10")) or salario_integral
-                if aplica_salud:
+                if aplica_salud and not tiene_novedad_sln_susp:
                     salud_emp = _calc_pct(ibc_salud_calc, tasa_salud_emp_param)
                     if ibc_mayor_10_smmlv:
                         salud_empl = _calc_pct(ibc_salud_calc, tasa_salud_empl_ibc10_param)
